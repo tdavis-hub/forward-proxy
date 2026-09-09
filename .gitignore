@@ -16,5 +16,5 @@ audit.log
 *.log
 .DS_Store
 
-# Prebuilt image export (publish via GitHub Releases, not the repo)
-release/*.tar.gz
+# Prebuilt images live in the repo (release/*.tar.gz) so they can be loaded
+# directly with `docker load` on targets that cannot build.

@@ -102,6 +102,27 @@ The image is multi-stage (`golang:1.22-alpine` → `alpine:3.21`), ships a
 statically linked binary, runs as a non-root user, and has a built-in
 healthcheck (`GET /healthz` on the proxy port, which is never TLS).
 
+### Prebuilt images (no build required)
+
+Prebuilt images for both `linux/amd64` and `linux/arm64` are committed under
+`release/`, so you can load one directly without building:
+
+| File | Architecture |
+|---|---|
+| `release/forward-proxy-latest.tar.gz` | `linux/amd64` |
+| `release/forward-proxy-latest-arm64.tar.gz` | `linux/arm64` |
+
+Pick the one matching your host (`uname -m` → `x86_64`/`amd64` or
+`aarch64`/`arm64`). Both are tagged `forward-proxy:latest`:
+
+```sh
+docker load -i release/forward-proxy-latest-arm64.tar.gz   # or the amd64 file
+docker images forward-proxy     # should list forward-proxy:latest
+```
+
+Then run via `docker compose -f release/docker-compose.yml up -d`, or plain
+`docker run` — full details in [`release/README.md`](release/README.md).
+
 ## Configuration reference
 
 Everything is managed through the web UI; the same data is stored in
