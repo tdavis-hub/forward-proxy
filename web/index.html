@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forward Proxy — Admin</title>
+<style>
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel2: #1d212b;
+  --border: #2a2f3a;
+  --text: #d8dce4;
+  --dim: #8b93a3;
+  --accent: #4f8cff;
+  --accent2: #3a6fd8;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --err: #f85149;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------- login ---------- */
+#login-wrap {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+}
+.login-card {
+  width: 360px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 32px;
+}
+.login-card h1 { margin: 0 0 4px; font-size: 20px; }
+.login-card p.sub { margin: 0 0 24px; color: var(--dim); font-size: 13px; }
+.login-card .field { margin-bottom: 14px; }
+.login-card label { display: block; font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+.login-card input {
+  width: 100%; padding: 9px 11px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+}
+.login-card input:focus { outline: none; border-color: var(--accent); }
+.login-card button {
+  width: 100%; margin-top: 8px; padding: 10px; background: var(--accent);
+  color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;
+}
+.login-card button:hover { background: var(--accent2); }
+.login-err { color: var(--err); font-size: 13px; margin-top: 12px; min-height: 16px; }
+
+/* ---------- app frame ---------- */
+#app { display: none; min-height: 100vh; }
+#topbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+#topbar .brand { font-weight: 600; font-size: 15px; }
+#topbar .brand small { color: var(--dim); font-weight: 400; margin-left: 8px; }
+#topbar .spacer { flex: 1; }
+#topbar .who { color: var(--dim); font-size: 13px; }
+#topbar .who b { color: var(--text); }
+#topbar button.ghost {
+  background: transparent; color: var(--dim); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px;
+}
+#topbar button.ghost:hover { color: var(--text); border-color: var(--dim); }
+#layout { display: flex; min-height: calc(100vh - 50px); }
+#sidebar {
+  width: 170px; flex-shrink: 0; background: var(--panel);
+  border-right: 1px solid var(--border); padding: 14px 10px;
+}
+#sidebar a {
+  display: block; padding: 8px 12px; margin-bottom: 2px; border-radius: 6px;
+  color: var(--dim); font-size: 14px;
+}
+#sidebar a:hover { background: var(--panel2); color: var(--text); text-decoration: none; }
+#sidebar a.active { background: var(--panel2); color: var(--accent); font-weight: 600; }
+#content { flex: 1; padding: 22px 26px; max-width: 1400px; }
+
+/* ---------- shared ---------- */
+h2 { font-size: 18px; margin: 0 0 16px; }
+h3 { font-size: 14px; margin: 22px 0 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px;
+}
+.card .k { color: var(--dim); font-size: 12px; margin-bottom: 4px; }
+.card .v { font-size: 19px; font-weight: 600; }
+.card .v small { font-size: 12px; color: var(--dim); font-weight: 400; }
+.banner {
+  border: 1px solid var(--warn); background: rgba(210,153,34,.1); color: var(--warn);
+  padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px;
+}
+.banner.err { border-color: var(--err); background: rgba(248,81,73,.1); color: var(--err); }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+th {
+  text-align: left; padding: 9px 12px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .4px; color: var(--dim); background: var(--panel2); border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.dim { color: var(--dim); }
+.tag {
+  display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+  border: 1px solid var(--border); color: var(--dim);
+}
+.tag.ok { color: var(--ok); border-color: rgba(63,185,80,.4); }
+.tag.warn { color: var(--warn); border-color: rgba(210,153,34,.4); }
+.tag.err { color: var(--err); border-color: rgba(248,81,73,.4); }
+.tag.info { color: var(--accent); border-color: rgba(79,140,255,.4); }
+.btn {
+  padding: 7px 14px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--panel2); color: var(--text); cursor: pointer; font-size: 13px;
+}
+.btn:hover { border-color: var(--dim); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent2); }
+.btn.danger { color: var(--err); }
+.btn.danger:hover { border-color: var(--err); }
+.btn.sm { padding: 3px 9px; font-size: 12px; }
+.toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+input[type=text], input[type=password], input[type=number], select, textarea {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 10px; font-size: 13px;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+textarea { font-family: var(--mono); font-size: 12px; width: 100%; resize: vertical; }
+.form-panel {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  padding: 18px; max-width: 720px;
+}
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.form-grid .full { grid-column: 1 / -1; }
+.field label { display: block; font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+.field input, .field select { width: 100%; }
+.field .hint { font-size: 11px; color: var(--dim); margin-top: 4px; }
+.form-actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.checkbox-row input { accent-color: var(--accent); }
+.msg { font-size: 13px; margin-left: auto; }
+.msg.ok { color: var(--ok); }
+.msg.err { color: var(--err); }
+#modal-bg {
+  display: none; position: fixed; inset: 0; background: rgba(5,8,14,.7); z-index: 50;
+  align-items: flex-start; justify-content: center; overflow-y: auto; padding: 40px 16px;
+}
+#modal {
+  width: 760px; max-width: 100%; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 22px;
+}
+#modal h2 { margin-bottom: 16px; }
+.pw-reset { margin-top: 4px; font-size: 12px; color: var(--dim); }
+.pw-reset a { cursor: pointer; }
+.footer-note { color: var(--dim); font-size: 12px; margin-top: 10px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.chart-card { padding: 12px 14px 14px; }
+.chart-card canvas { width: 100%; display: block; }
+.chart-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--dim); margin-top: 10px; }
+.chart-legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+.btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (max-width: 700px) {
+  #layout { flex-direction: column; }
+  #sidebar { width: 100%; display: flex; border-right: none; border-bottom: 1px solid var(--border); }
+  .form-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="login-wrap">
+  <div class="login-card">
+    <h1>Forward Proxy</h1>
+    <p class="sub">Management interface — admin access required</p>
+    <div class="field"><label>Username</label><input id="li-user" autocomplete="username" autofocus></div>
+    <div class="field"><label>Password</label><input id="li-pass" type="password" autocomplete="current-password"></div>
+    <button id="li-btn">Sign in</button>
+    <div class="login-err" id="li-err"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="topbar">
+    <span class="brand">⬡ Forward Proxy<small id="t-version"></small></span>
+    <span class="spacer"></span>
+    <span class="who">signed in as <b id="t-user"></b></span>
+    <button class="ghost" id="t-logout">Log out</button>
+  </div>
+  <div id="layout">
+    <div id="sidebar">
+      <a data-view="dashboard" href="javascript:void 0">Dashboard</a>
+      <a data-view="users" href="javascript:void 0">Users</a>
+      <a data-view="rules" href="javascript:void 0">Global Rules</a>
+      <a data-view="logs" href="javascript:void 0">Activity Log</a>
+      <a data-view="audit" href="javascript:void 0">Audit</a>
+      <a data-view="settings" href="javascript:void 0">Settings</a>
+    </div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<div id="modal-bg"><div id="modal"></div></div>
+
+<script>
+"use strict";
+
+/* ---------------- helpers ---------------- */
+
+const $ = (sel, el) => (el || document).querySelector(sel);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function api(path, method, body) {
+  // The page is served at /admin/, so API paths are relative to it ("api/..." -> /admin/api/...).
+  return fetch("api/" + path, {
+    method: method || "GET",
+    credentials: "same-origin",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(async (r) => {
+    let data = null;
+    try { data = await r.json(); } catch (_) {}
+    if (r.status === 401 && !path.startsWith("login")) {
+      showLogin();
+      throw new Error("session expired");
+    }
+    if (!r.ok) {
+      const msg = (data && data.error) ? data.error : ("HTTP " + r.status);
+      throw new Error(msg);
+    }
+    return data;
+  });
+}
+
+function fmtBytes(n) {
+  if (n == null || isNaN(n)) return "0 B";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0; n = Number(n);
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(1)) + " " + u[i];
+}
+function fmtUptime(sec) {
+  sec = Math.max(0, sec | 0);
+  const d = (sec / 86400) | 0, h = ((sec % 86400) / 3600) | 0, m = ((sec % 3600) / 60) | 0, s = sec % 60;
+  const parts = [];
+  if (d) parts.push(d + "d");
+  if (h || d) parts.push(h + "h");
+  if (m || h || d) parts.push(m + "m");
+  parts.push(s + "s");
+  return parts.join(" ");
+}
+function fmtTime(iso) {
+  if (!iso) return "—";
+  const t = new Date(iso);
+  if (isNaN(t)) return iso;
+  const p = (n) => String(n).padStart(2, "0");
+  return p(t.getMonth() + 1) + "-" + p(t.getDate()) + " " + p(t.getHours()) + ":" + p(t.getMinutes()) + ":" + p(t.getSeconds());
+}
+
+/* ---------------- auth / shell ---------------- */
+
+let selfInfo = null;
+let currentView = "dashboard";
+let statusCache = null;
+let usersCache = [];
+
+function showLogin() {
+  $("#login-wrap").style.display = "flex";
+  $("#app").style.display = "none";
+  selfInfo = null;
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+}
+function showApp() {
+  $("#login-wrap").style.display = "none";
+  $("#app").style.display = "block";
+  startAutoRefresh();
+  if (selfInfo) {
+    $("#t-user").textContent = selfInfo.username;
+    if (statusCache) $("#t-version").textContent = "v" + statusCache.version;
+  }
+  renderView(currentView);
+}
+
+// Keep the dashboard fresh while the tab is open: re-render it every 30 s
+// (renderDashboard keeps the previous HTML until new data arrives, so there
+// is no Loading… flash).
+let refreshTimer = null;
+function startAutoRefresh() {
+  if (refreshTimer) return;
+  refreshTimer = setInterval(() => {
+    if (!selfInfo) return;
+    refreshStatus(false).catch(() => {});
+    if (currentView === "dashboard") renderView("dashboard");
+  }, 30000);
+}
+
+$("#li-btn").onclick = doLogin;
+$("#li-pass").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+function doLogin() {
+  const errEl = $("#li-err");
+  errEl.textContent = "";
+  const user = $("#li-user").value.trim();
+  const pass = $("#li-pass").value;
+  if (!user || !pass) { errEl.textContent = "Enter username and password"; return; }
+  api("login", "POST", { username: user, password: pass })
+    .then(() => api("self"))
+    .then((info) => { selfInfo = info; currentView = "dashboard"; showApp(); refreshStatus(true); })
+    .catch((e) => { errEl.textContent = e.message || "login failed"; });
+}
+$("#t-logout").onclick = () => {
+  api("logout", "POST").catch(() => {});
+  showLogin();
+};
+
+/* ---------------- view router ---------------- */
+
+document.querySelectorAll("#sidebar a").forEach(a => {
+  a.onclick = () => { currentView = a.dataset.view; renderView(currentView); };
+});
+
+function renderView(name) {
+  document.querySelectorAll("#sidebar a").forEach(a => a.classList.toggle("active", a.dataset.view === name));
+  const c = $("#content");
+  c.innerHTML = "";
+  const renderers = {
+    dashboard: renderDashboard,
+    users: renderUsers,
+    rules: renderRules,
+    logs: renderLogs,
+    audit: renderAudit,
+    settings: renderSettings,
+  };
+  const render = renderers[name];
+  if (!render) { c.innerHTML = "<h2>" + esc(name) + "</h2>"; return; }
+  // Fail loud: a rejected render used to leave the "Loading…" placeholder forever.
+  Promise.resolve(render(c)).catch((e) => {
+    console.error("failed to render " + name + ":", e);
+    c.innerHTML = '<div class="banner err">' + esc((e && e.message) || "failed to load") + '</div>';
+  });
+}
+
+async function refreshStatus(force) {
+  if (statusCache && !force) return statusCache;
+  statusCache = await api("status");
+  if (selfInfo) $("#t-version").textContent = "v" + statusCache.version;
+  return statusCache;
+}
+
+/* ---------------- dashboard ---------------- */
+
+function recentLogsTable(rows, limit) {
+  if (!rows.length) return '<p class="dim">No activity recorded yet.</p>';
+  let h = '<table><thead><tr><th>Time</th><th>User</th><th>Method</th><th>Target</th><th>Outcome</th><th>Status</th><th>Bytes</th><th>ms</th></tr></thead><tbody>';
+  for (const e of rows) {
+    const oc = e.outcome.startsWith("DENIED") ? "err" : (e.outcome.startsWith("ERROR") ? "warn" : (e.outcome === "ALLOWED" || e.outcome === "CONNECT" ? "ok" : ""));
+    h += '<tr><td class="mono dim">' + esc(fmtTime(e.time)) + '</td>'
+      + '<td>' + esc(e.user || "—") + '</td>'
+      + '<td class="mono">' + esc(e.method) + '</td>'
+      + '<td class="mono">' + esc(e.host) + (e.path && e.path !== "/" ? '<span class="dim">' + esc(shortenPath(e.path)) + '</span>' : '') + '</td>'
+      + '<td><span class="tag ' + oc + '">' + esc(e.outcome) + '</span></td>'
+      + '<td class="mono">' + (e.status || "—") + '</td>'
+      + '<td class="mono dim">' + fmtBytes(e.bytes_in) + ' ↓ ' + fmtBytes(e.bytes_out) + ' ↑</td>'
+      + '<td class="mono dim">' + e.duration_ms + '</td></tr>';
+  }
+  return h + "</tbody></table>";
+}
+function shortenPath(p) {
+  p = p.replace(/^https?:\/\//, "");
+  return p.length > 34 ? p.slice(0, 31) + "…" : p;
+}
+
+async function renderDashboard(c) {
+  // On auto-refresh the previous dashboard HTML is still present: keep it
+  // visible until the fresh data arrives (no Loading… flash).
+  const replacing = c.innerHTML.startsWith("<h2>Dashboard</h2>");
+  if (!replacing) c.innerHTML = '<h2>Dashboard</h2><p class="dim">Loading…</p>';
+  let s;
+  try { s = await refreshStatus(true); }
+  catch (e) { c.innerHTML = '<div class="banner err">' + esc(e.message) + '</div>'; return; }
+
+  const t = s.totals || {};
+  let h = '<h2>Dashboard</h2>';
+  if (s.default_admin_password) {
+    h += '<div class="banner">⚠ The default admin password (<b>admin123</b>) is still in use. '
+      + 'Go to <b>Users → admin → Reset password</b> to change it before exposing this proxy.</div>';
+  }
+  h += '<div class="cards">'
+    + card("Version", "v" + esc(s.version))
+    + card("Uptime", esc(fmtUptime(s.uptime_sec)))
+    + card("Proxy", '<span class="mono">' + esc(s.proxy.listen_addr) + '</span>')
+    + card("Admin UI", '<span class="mono">' + esc(s.proxy.admin_listen_addr) + '</span>')
+    + card("Requests (total)", t.requests ?? 0, "all time")
+    + card("Data (total)", fmtBytes(t.bytes_in) + " ↓ " + fmtBytes(t.bytes_out) + " ↑")
+    + card("Active connections", t.active_conns ?? 0, t.user_count + " user" + (t.user_count === 1 ? "" : "s"))
+    + card("Auth", s.proxy.require_auth ? 'required' : 'open')
+    + '</div>';
+
+  h += '<h3>Statistics</h3>'
+    + '<div class="toolbar" id="st-bar">'
+    + '<select id="st-hours" onchange="stHours(this.value)"><option value="1">Last hour</option><option value="6">Last 6 hours</option><option value="24" selected>Last 24 hours</option><option value="168">Last 7 days</option></select>'
+    + '<select id="st-user" onchange="stUser(this.value)"><option value="">All users</option>' + s.users.map(u => '<option value="' + esc(u.username) + '">' + esc(u.username) + '</option>').join("") + '</select>'
+    + '<button class="btn" id="st-refresh" onclick="loadStats()">⟳ Refresh</button>'
+    + '<span class="dim" id="st-note" style="font-size:12px"></span>'
+    + '</div>'
+    + '<div class="charts">'
+    + '<div class="card chart-card"><div class="k">Requests <span id="st-bucket1" class="dim"></span></div><canvas id="ch-req"></canvas><div class="chart-legend" id="lg-req"></div></div>'
+    + '<div class="card chart-card"><div class="k">Data egress <span id="st-bucket2" class="dim"></span></div><canvas id="ch-bytes"></canvas><div class="chart-legend" id="lg-bytes"></div></div>'
+    + '<div class="card chart-card"><div class="k">Top users by data <span class="dim">(in window)</span></div><canvas id="ch-users"></canvas></div>'
+    + '</div>';
+
+  h += '<h3>Users — usage</h3>';
+  h += '<table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Policy</th><th>Active</th><th>Requests</th><th>Bytes in</th><th>Bytes out</th><th>Last activity</th></tr></thead><tbody>';
+  for (const u of s.users) {
+    const policy = [u.whitelist_only ? "wl-only" : null,
+      (u.whitelist || []).length ? "wl:" + u.whitelist.length : null,
+      (u.blacklist || []).length ? "bl:" + u.blacklist.length : null].filter(Boolean).join(" ");
+    h += '<tr><td>' + esc(u.username) + (u.default_password ? ' <span class="tag warn">default pw</span>' : '') + '</td>'
+      + '<td><span class="tag ' + (u.role === "admin" ? "info" : "") + '">' + esc(u.role) + '</span></td>'
+      + '<td><span class="tag ' + (u.enabled ? "ok" : "err") + '">' + (u.enabled ? "enabled" : "disabled") + '</span></td>'
+      + '<td class="dim">' + (policy ? esc(policy) : "allow all") + '</td>'
+      + '<td class="mono">' + (u.active_conns || 0) + '</td>'
+      + '<td class="mono">' + (u.stats.requests || 0) + '</td>'
+      + '<td class="mono dim">' + fmtBytes(u.stats.bytes_in) + '</td>'
+      + '<td class="mono dim">' + fmtBytes(u.stats.bytes_out) + '</td>'
+      + '<td class="dim">' + esc(fmtTime(u.last_used_at || u.stats.last_request_at)) + '</td></tr>';
+  }
+  h += '</tbody></table>';
+
+  h += '<h3>Recent activity <a href="javascript:void 0" onclick="document.querySelector(\'#sidebar a[data-view=logs]\').click()">view all →</a></h3>';
+  h += recentLogsTable(s.recent_logs || [], 50);
+  c.innerHTML = h;
+  loadStats();
+}
+function card(k, v, sub) {
+  return '<div class="card"><div class="k">' + esc(k) + '</div><div class="v">' + v + (sub ? '<br><small>' + esc(sub) + '</small>' : '') + '</div></div>';
+}
+
+/* ---------------- stats charts ---------------- */
+
+let stState = { hours: 24, user: "" };
+
+function stHours(v) { stState.hours = parseInt(v, 10) || 24; loadStats(); }
+function stUser(v) { stState.user = v; loadStats(); }
+
+async function loadStats() {
+  const note = $("#st-note");
+  let d;
+  try {
+    d = await api("stats/timeline?hours=" + stState.hours + "&user=" + encodeURIComponent(stState.user));
+  } catch (e) {
+    if (note) note.textContent = e.message;
+    return;
+  }
+  if (note) note.textContent = "";
+  const bl = bucketLabel(d.bucket_sec);
+  const b1 = $("#st-bucket1"), b2 = $("#st-bucket2");
+  if (b1) b1.textContent = "(per " + bl + ")";
+  if (b2) b2.textContent = "(per " + bl + ")";
+  drawStats(d);
+}
+
+function bucketLabel(sec) {
+  if (sec >= 86400) return (sec / 86400) + (sec === 86400 ? " day" : " days");
+  if (sec >= 3600) return (sec / 3600) + (sec === 3600 ? " hour" : " hours");
+  if (sec >= 60) return (sec / 60) + (sec === 60 ? " minute" : " minutes");
+  return sec + " sec";
+}
+
+function prepCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(cv.clientWidth || 0, 260);
+  const h = 170;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  cv.style.height = h + "px";
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx: ctx, w: w, h: h };
+}
+
+function niceStep(raw) {
+  if (raw <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 5, 10]) if (m * p >= raw) return m * p;
+  return 10 * p;
+}
+
+function xLabel(t, spanSec) {
+  const d = new Date(t * 1000);
+  const p = (n) => String(n).padStart(2, "0");
+  if (spanSec <= 172800) return p(d.getHours()) + ":" + p(d.getMinutes());
+  return p(d.getMonth() + 1) + "/" + p(d.getDate());
+}
+
+// Draws the shared frame (grid, y labels, x labels) for a time chart.
+function chartFrame(ctx, w, h, times, top, yfmt) {
+  const padL = 46, padR = 10, padT = 8, padB = 20;
+  const n = times.length;
+  const ih = h - padT - padB;
+  ctx.font = "10px sans-serif";
+  ctx.strokeStyle = "rgba(42,47,58,.9)";
+  ctx.lineWidth = 1;
+  ctx.textAlign = "right";
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + ih - (ih * i) / 4;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+    ctx.fillStyle = "#8b93a3";
+    ctx.fillText(yfmt(top * i / 4), padL - 6, y + 3);
+  }
+  ctx.textAlign = "center";
+  if (n > 1) {
+    const span = times[n - 1] - times[0];
+    const marks = Math.min(n, 5);
+    for (let i = 0; i < marks; i++) {
+      const idx = marks === 1 ? 0 : Math.round((n - 1) * i / (marks - 1));
+      const x = padL + (w - padL - padR) * idx / (n - 1);
+      ctx.fillText(xLabel(times[idx], span), x, h - 6);
+    }
+  } else if (n === 1) {
+    ctx.fillText(xLabel(times[0], 0), padL + (w - padL - padR) / 2, h - 6);
+  }
+  return { padL: padL, padR: padR, padT: padT, padB: padB };
+}
+
+function drawTimeSeries(cv, times, series) {
+  const { ctx, w, h } = prepCanvas(cv);
+  let max = 0;
+  for (const s of series) for (const v of s.values) if (v > max) max = v;
+  const step = niceStep(max / 4);
+  const top = Math.max(step, Math.ceil(max / step) * step) || step;
+  const fr = chartFrame(ctx, w, h, times, top, (v) => (v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : v >= 1e3 ? Math.round(v / 1e3) + "k" : String(Math.round(v))));
+  const n = times.length;
+  const iw = w - fr.padL - fr.padR, ih = h - fr.padT - fr.padB;
+  const px = (i) => fr.padL + (n > 1 ? iw * i / (n - 1) : iw / 2);
+  const py = (v) => fr.padT + ih - (ih * Math.min(v, top)) / top;
+  for (const s of series) {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = px(i), y = py(s.values[i]);
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    }
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      ctx.beginPath();
+      ctx.arc(px(i), py(s.values[i]), 1.8, 0, 7);
+      ctx.fillStyle = s.color;
+      ctx.fill();
+    }
+  }
+}
+
+function drawBars(cv, times, values, yfmt) {
+  const { ctx, w, h } = prepCanvas(cv);
+  let max = 0;
+  for (const v of values) if (v > max) max = v;
+  const step = niceStep(max / 4);
+  const top = Math.max(step, Math.ceil(max / step) * step) || step;
+  const fr = chartFrame(ctx, w, h, times, top, yfmt);
+  const n = values.length;
+  const iw = w - fr.padL - fr.padR, ih = h - fr.padT - fr.padB;
+  const bw = Math.max(2, Math.min(24, (iw / Math.max(n, 1)) * 0.6));
+  ctx.fillStyle = "#4f8cff";
+  for (let i = 0; i < n; i++) {
+    const cx = fr.padL + (n > 1 ? iw * (i + 0.5) / n : iw / 2);
+    const yv = (ih * Math.min(values[i], top)) / top;
+    if (yv > 0) ctx.fillRect(cx - bw / 2, fr.padT + ih - yv, bw, yv);
+  }
+}
+
+function drawHBars(cv, rows) {
+  const { ctx, w, h } = prepCanvas(cv);
+  if (!rows.length) {
+    ctx.fillStyle = "#8b93a3";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("No traffic in this window yet.", 12, h / 2);
+    return;
+  }
+  const padL = 92, padR = 66, padT = 8;
+  const rowH = (h - padT * 2) / rows.length;
+  const barMax = w - padL - padR;
+  let max = 0;
+  for (const r of rows) if (r.v > max) max = r.v;
+  ctx.font = "11px sans-serif";
+  rows.forEach((r, i) => {
+    const y = padT + rowH * i + rowH / 2;
+    ctx.fillStyle = "#8b93a3";
+    ctx.textAlign = "right";
+    ctx.fillText(r.name.length > 12 ? r.name.slice(0, 11) + "…" : r.name, padL - 8, y + 4);
+    const bw = max > 0 ? barMax * r.v / max : 0;
+    ctx.fillStyle = i === 0 ? "#4f8cff" : "rgba(79,140,255,.5)";
+    ctx.fillRect(padL, y - rowH * 0.28, Math.max(bw, 1), Math.min(rowH * 0.56, 14));
+    ctx.fillStyle = "#d8dce4";
+    ctx.textAlign = "left";
+    ctx.fillText(r.label, padL + Math.min(bw, barMax - 52) + 6, y + 4);
+  });
+}
+
+function chartLegend(el, items) {
+  if (!el) return;
+  el.innerHTML = items.map((it) => '<span><span class="sw" style="background:' + it[0] + '"></span>' + esc(it[1]) + '</span>').join("");
+}
+
+function drawStats(d) {
+  const pts = d.points || [];
+  const times = pts.map((p) => p.t);
+  const sum = (f) => pts.reduce((a, p) => a + f(p), 0);
+  drawTimeSeries($("#ch-req"), times, [
+    { name: "allowed", color: "#3fb950", values: pts.map((p) => p.allowed) },
+    { name: "denied", color: "#f85149", values: pts.map((p) => p.denied) },
+    { name: "errors", color: "#d29922", values: pts.map((p) => p.errors) },
+  ]);
+  chartLegend($("#lg-req"), [
+    ["#3fb950", "allowed " + sum((p) => p.allowed)],
+    ["#f85149", "denied " + sum((p) => p.denied)],
+    ["#d29922", "errors " + sum((p) => p.errors)],
+  ]);
+  drawBars($("#ch-bytes"), times, pts.map((p) => p.bytes_out / 1048576), (v) => fmtBytes(v * 1048576));
+  chartLegend($("#lg-bytes"), [["#4f8cff", fmtBytes(sum((p) => p.bytes_out)) + " out · " + fmtBytes(sum((p) => p.bytes_in)) + " in"]]);
+  drawHBars($("#ch-users"), (d.top_users || []).map((u) => ({ name: u.user, v: u.bytes_out, label: fmtBytes(u.bytes_out) })));
+  const note = $("#st-note");
+  if (note) note.textContent = sum((p) => p.requests) === 0 ? "no activity in this window yet" : "";
+}
+
+/* ---------------- users ---------------- */
+
+function rulesListText(list) { return (list || []).join("\n"); }
+
+async function renderUsers(c) {
+  c.innerHTML = '<h2>Users</h2><div class="toolbar"><button class="btn primary" id="u-new">+ New user</button><span class="msg" id="u-msg"></span></div><div id="u-list"><p class="dim">Loading…</p></div>';
+  $("#u-new").onclick = () => userForm(null);
+  await reloadUserTable();
+}
+
+async function reloadUserTable() {
+  usersCache = await api("users");
+  let h = '<table><thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Policy</th><th>Conns (max)</th><th>Requests</th><th>Traffic</th><th>Daily cap</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>';
+  for (const u of usersCache) {
+    const policy = [u.whitelist_only ? "wl-only" : null,
+      (u.whitelist || []).length ? "wl:" + u.whitelist.length : null,
+      (u.blacklist || []).length ? "bl:" + u.blacklist.length : null].filter(Boolean).join(" ") || "allow all";
+    h += '<tr><td>' + esc(u.username) + (u.default_password ? ' <span class="tag warn">default pw</span>' : '') + '</td>'
+      + '<td><span class="tag ' + (u.role === "admin" ? "info" : "") + '">' + esc(u.role) + '</span></td>'
+      + '<td><span class="tag ' + (u.enabled ? "ok" : "err") + '">' + (u.enabled ? "enabled" : "disabled") + '</span></td>'
+      + '<td class="dim">' + esc(policy) + '</td>'
+      + '<td class="mono">' + (u.active_conns || 0) + ' / ' + (u.max_conns || '∞') + '</td>'
+      + '<td class="mono">' + (u.stats.requests || 0) + '</td>'
+      + '<td class="mono dim">' + fmtBytes(u.stats.bytes_in) + ' ↓ ' + fmtBytes(u.stats.bytes_out) + ' ↑</td>'
+      + '<td class="mono dim">' + (u.daily_traffic_mb ? u.daily_traffic_mb + ' MB' : '∞') + '</td>'
+      + '<td class="dim">' + esc(fmtTime(u.created_at)) + '</td>'
+      + '<td class="dim">' + esc(fmtTime(u.last_used_at)) + '</td>'
+      + '<td style="white-space:nowrap"><button class="btn sm" data-edit="' + esc(u.id) + '">Edit</button> '
+      + '<button class="btn sm" data-pw="' + esc(u.id) + '">Password</button> '
+      + '<button class="btn sm" data-reset="' + esc(u.id) + '" title="Clear today\'s traffic counter">Reset</button> '
+      + '<button class="btn sm danger" data-del="' + esc(u.id) + '">Delete</button></td></tr>';
+  }
+  h += '</tbody></table>';
+  $("#u-list").innerHTML = h;
+  document.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => userForm(usersCache.find(x => x.id === b.dataset.edit)));
+  document.querySelectorAll("[data-pw]").forEach(b => b.onclick = () => pwReset(usersCache.find(x => x.id === b.dataset.pw)));
+  document.querySelectorAll("[data-reset]").forEach(b => b.onclick = () => resetUsage(usersCache.find(x => x.id === b.dataset.reset)));
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => deleteUser(usersCache.find(x => x.id === b.dataset.del)));
+}
+
+function resetUsage(u) {
+  if (!u) return;
+  if (!window.confirm("Clear " + u.username + "'s daily traffic counter now? (It normally resets at UTC midnight.)")) return;
+  api("users/" + u.id + "/reset", "POST")
+    .then(() => renderUsers($("#content")))
+    .catch((e) => { const m = $("#u-msg"); if (m) { m.className = "msg err"; m.textContent = e.message || "reset failed"; } });
+}
+
+function userForm(u) {
+  const isNew = !u;
+  u = u || { id: "", username: "", role: "user", enabled: true, whitelist_only: false,
+             whitelist: [], blacklist: [], max_conns: 0, daily_traffic_mb: 0 };
+  const m = $("#modal");
+  m.innerHTML = '<h2>' + (isNew ? "New user" : "Edit user: " + esc(u.username)) + '</h2>'
+    + '<div class="form-grid">'
+    + field("Username", '<input id="f-user" value="' + esc(u.username) + '" maxlength="64">', "letters, digits, dot, dash, underscore (2–64 chars)")
+    + field("Password", '<input id="f-pass" type="password" placeholder="' + (isNew ? "min 6 characters" : "leave blank to keep") + '" autocomplete="new-password">', isNew ? "min 6 characters" : "optional")
+    + field("Role", '<select id="f-role"><option value="user"' + (u.role === "user" ? " selected" : "") + '>user</option><option value="admin"' + (u.role === "admin" ? " selected" : "") + '>admin</option></select>', "admin = can access this management UI")
+    + field("Status", '<label class="checkbox-row"><input type="checkbox" id="f-enabled"' + (u.enabled ? " checked" : "") + '> enabled</label><label class="checkbox-row" style="margin-top:8px"><input type="checkbox" id="f-wlo"' + (u.whitelist_only ? " checked" : "") + '> whitelist-only</label>', "whitelist-only: only the whitelist below is reachable")
+    + '<div class="field full"><label>Whitelist <span class="dim">(one pattern per line)</span></label><textarea id="f-wl" rows="4" placeholder="example.com&#10;*.trusted.org&#10;10.0.0.0/8"></textarea><div class="hint">Exact hosts, <b>*.domain</b> (subdomains included), globs (*, ?), CIDR or bare IPs. Blacklist always wins; when any whitelist is defined, only listed hosts are reachable.</div></div>'
+    + '<div class="field full"><label>Blacklist <span class="dim">(one pattern per line)</span></label><textarea id="f-bl" rows="4" placeholder="bad.example.com&#10;*.spam.net"></textarea></div>'
+    + field("Max concurrent connections", '<input id="f-conns" type="number" min="0" max="100000" value="' + u.max_conns + '">', "0 = use global default")
+    + field("Daily traffic cap (MB)", '<input id="f-daily" type="number" min="0" max="1000000" value="' + u.daily_traffic_mb + '">', "0 = unlimited; resets each day")
+    + '</div>'
+    + '<div class="form-actions"><button class="btn primary" id="f-save">Save</button><button class="btn" id="f-cancel">Cancel</button><span class="msg" id="f-msg"></span></div>';
+  $("#modal-bg").style.display = "flex";
+  $("#f-cancel").onclick = closeModal;
+  $("#f-save").onclick = () => {
+    const lines = (ta) => ta.value.split("\n").map(s => s.trim()).filter(Boolean);
+    const body = {
+      username: $("#f-user").value.trim(),
+      password: $("#f-pass").value,
+      role: $("#f-role").value,
+      enabled: $("#f-enabled").checked,
+      whitelist_only: $("#f-wlo").checked,
+      whitelist: lines($("#f-wl")),
+      blacklist: lines($("#f-bl")),
+      max_conns: parseInt($("#f-conns").value || "0", 10),
+      daily_traffic_mb: parseInt($("#f-daily").value || "0", 10),
+    };
+    const msg = $("#f-msg");
+    msg.className = "msg"; msg.textContent = "";
+    const req = isNew ? api("users", "POST", body) : api("users/" + u.id, "PUT", body);
+    req.then(() => {
+      closeModal();
+      return reloadUserTable();
+    }).then(() => {
+      const el = $("#u-msg");
+      if (el) { el.textContent = (isNew ? "Created" : "Saved") + " " + body.username; el.className = "msg ok"; setTimeout(() => el.textContent = "", 3000); }
+    }).catch((e) => { msg.className = "msg err"; msg.textContent = e.message; });
+  };
+  setTimeout(() => $("#f-user").focus(), 30);
+}
+function field(label, input, hint) {
+  return '<div class="field"><label>' + label + '</label>' + input + (hint ? '<div class="hint">' + hint + '</div>' : '') + '</div>';
+}
+
+function pwReset(u) {
+  if (!u) return;
+  const m = $("#modal");
+  m.innerHTML = '<h2>Reset password — ' + esc(u.username) + '</h2>'
+    + '<div class="field"><label>New password</label><input id="r-pass" type="password" autocomplete="new-password" placeholder="min 6 characters"></div>'
+    + '<div class="form-actions"><button class="btn primary" id="r-save">Set password</button><button class="btn" id="r-cancel">Cancel</button><span class="msg" id="r-msg"></span></div>';
+  $("#modal-bg").style.display = "flex";
+  $("#r-cancel").onclick = closeModal;
+  $("#r-save").onclick = () => {
+    const msg = $("#r-msg");
+    api("users/" + u.id + "/password", "POST", { password: $("#r-pass").value })
+      .then(() => { closeModal(); return reloadUserTable(); })
+      .catch((e) => { msg.className = "msg err"; msg.textContent = e.message; });
+  };
+  setTimeout(() => $("#r-pass").focus(), 30);
+}
+
+function deleteUser(u) {
+  if (!u) return;
+  const label = u.role === "admin" ? "admin " + u.username : u.username;
+  if (!confirm('Delete user "' + label + '"? This cannot be undone.')) return;
+  api("users/" + u.id, "DELETE")
+    .then(() => reloadUserTable())
+    .catch((e) => alert(e.message));
+}
+
+function closeModal() { $("#modal-bg").style.display = "none"; $("#modal").innerHTML = ""; }
+$("#modal-bg").addEventListener("click", e => { if (e.target.id === "modal-bg") closeModal(); });
+
+/* ---------------- global rules ---------------- */
+
+async function renderRules(c) {
+  c.innerHTML = '<h2>Global Rules</h2><p class="dim">Loading…</p>';
+  let g;
+  try { g = await api("global-rules"); }
+  catch (e) { c.innerHTML = '<div class="banner err">' + esc(e.message) + '</div>'; return; }
+  c.innerHTML =
+    '<h2>Global Rules</h2>'
+    + '<div class="banner">Precedence: <b>global blacklist</b> → <b>user blacklist</b> → <b>whitelist</b> (user + global, union) → allow. '
+    + 'If any whitelist (global or per-user) is non-empty, or <i>whitelist-only</i> is on, only listed hosts are reachable. '
+    + 'Blacklist entries always win.</div>'
+    + '<div class="form-panel">'
+    + '<div class="form-grid">'
+    + '<div class="field full"><label class="checkbox-row"><input type="checkbox" id="g-wlo"' + (g.whitelist_only ? " checked" : "") + '><b> Whitelist-only mode</b></label><div class="hint">Forces deny-by-default for every user, even when all whitelists are empty.</div></div>'
+    + '<div class="field full"><label>Global whitelist <span class="dim">(one pattern per line)</span></label><textarea id="g-wl" rows="6" placeholder="*.trusted.example.com&#10;intranet.example.org&#10;192.168.0.0/16"></textarea></div>'
+    + '<div class="field full"><label>Global blacklist <span class="dim">(one pattern per line)</span></label><textarea id="g-bl" rows="6" placeholder="malware.example.net&#10;*.scam.org&#10;203.0.113.0/24"></textarea><div class="hint">Supported patterns: exact host (<code>example.com</code>), wildcard (<code>*.example.com</code> — matches the domain and all subdomains), glob (<code>*</code>/<code>?</code>), CIDR (<code>10.0.0.0/8</code>) or a bare IP.</div></div>'
+    + '</div>'
+    + '<div class="form-actions"><button class="btn primary" id="g-save">Save rules</button><span class="msg" id="g-msg"></span></div>'
+    + '</div>';
+  $("#g-save").onclick = () => {
+    const lines = (ta) => ta.value.split("\n").map(s => s.trim()).filter(Boolean);
+    const msg = $("#g-msg");
+    msg.className = "msg"; msg.textContent = "";
+    api("global-rules", "PUT", {
+      whitelist_only: $("#g-wlo").checked,
+      whitelist: lines($("#g-wl")),
+      blacklist: lines($("#g-bl")),
+    }).then(() => {
+      msg.className = "msg ok"; msg.textContent = "Rules saved — effective immediately.";
+      setTimeout(() => msg.textContent = "", 3000);
+    }).catch((e) => { msg.className = "msg err"; msg.textContent = e.message; });
+  };
+}
+
+/* ---------------- logs ---------------- */
+
+async function renderLogs(c) {
+  c.innerHTML = '<h2>Activity Log</h2><p class="dim">Loading…</p>';
+  let users;
+  try { users = await api("users"); } catch (_) { users = []; }
+  c.innerHTML =
+    '<h2>Activity Log</h2>'
+    + '<div class="toolbar">'
+    + '<select id="l-user"><option value="">All users</option>' + users.map(u => '<option value="' + esc(u.username) + '">' + esc(u.username) + '</option>').join("") + '</select>'
+    + '<input type="text" id="l-q" placeholder="search: host, path, user, outcome…" style="width:280px">'
+    + '<select id="l-limit"><option value="50">50 entries</option><option value="100" selected>100</option><option value="250">250</option><option value="500">500</option><option value="1000">1000</option></select>'
+    + '<button class="btn primary" id="l-search">Search</button>'
+    + '<button class="btn" id="l-export">Export CSV</button>'
+    + '<button class="btn danger" id="l-clear">Clear log</button>'
+    + '</div><div id="l-list"><p class="dim">Loading…</p></div>';
+  const run = () => {
+    if (!$("#l-list")) return; // view may have changed while typing
+    loadLogs($("#l-user").value, $("#l-q").value.trim(), parseInt($("#l-limit").value, 10));
+  };
+  $("#l-search").onclick = run;
+  $("#l-q").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+  $("#l-export").onclick = () => {
+    const q = new URLSearchParams({ limit: $("#l-limit").value, user: $("#l-user").value, q: $("#l-q").value.trim() });
+    window.open("api/logs/export?" + q.toString(), "_blank");
+  };
+  $("#l-clear").onclick = () => {
+    if (!window.confirm("Clear the entire activity log? This cannot be undone.")) return;
+    const btn = $("#l-clear");
+    btn.disabled = true;
+    api("logs", "DELETE")
+      .then(() => { if ($("#l-list")) run(); })
+      .catch((e) => {
+        const list = $("#l-list");
+        if (list) list.innerHTML = '<div class="banner err">' + esc((e && e.message) || "clear failed") + '</div>';
+      })
+      .finally(() => { if (btn) btn.disabled = false; });
+  };
+  run();
+}
+
+async function loadLogs(user, q, limit) {
+  const list = $("#l-list");
+  if (!list) return;
+  list.innerHTML = '<p class="dim">Loading…</p>';
+  let rows;
+  try { rows = await api("logs?limit=" + limit + "&user=" + encodeURIComponent(user) + "&q=" + encodeURIComponent(q)); }
+  catch (e) { list.innerHTML = '<div class="banner err">' + esc(e.message) + '</div>'; return; }
+  list.innerHTML = '<p class="dim" style="margin:6px 0 8px">' + rows.length + ' entries (newest first)</p>' + recentLogsTable(rows, 200);
+}
+
+/* ---------------- audit ---------------- */
+
+async function renderAudit(c) {
+  c.innerHTML = '<h2>Admin Audit Log</h2><p class="dim">Loading…</p>';
+  let rows;
+  try { rows = await api("audit?limit=200"); }
+  catch (e) { c.innerHTML = '<div class="banner err">' + esc(e.message) + '</div>'; return; }
+  const head = '<h2>Admin Audit Log</h2>'
+    + '<p class="dim" style="margin:0 0 8px">Append-only record of admin actions — including activity-log clears — stored in /data/audit.log. Not affected by "Clear log".</p>';
+  if (!rows.length) { c.innerHTML = head + '<p class="dim">No audit entries yet.</p>'; return; }
+  let table = '<table><thead><tr><th>Time</th><th>Action</th><th>Who</th><th>Detail</th></tr></thead><tbody>';
+  for (const e of rows) {
+    table += '<tr><td class="mono dim">' + esc(fmtTime(e.time)) + '</td>'
+      + '<td><span class="tag">' + esc(e.action) + '</span></td>'
+      + '<td>' + esc(e.who || "—") + '</td>'
+      + '<td class="mono">' + esc(e.detail || "") + '</td></tr>';
+  }
+  c.innerHTML = head + table + '</tbody></table>';
+}
+
+/* ---------------- settings ---------------- */
+
+async function renderSettings(c) {
+  c.innerHTML = '<h2>Settings</h2><p class="dim">Loading…</p>';
+  let s;
+  try { s = await api("settings"); }
+  catch (e) { c.innerHTML = '<div class="banner err">' + esc(e.message) + '</div>'; return; }
+  const p = s.proxy, l = s.logs;
+  c.innerHTML =
+    '<h2>Settings</h2>'
+    + '<div class="form-panel"><h3 style="margin-top:0">Proxy</h3><div class="form-grid">'
+    + '<div class="field full"><label class="checkbox-row"><input type="checkbox" id="s-enabled"' + (p.enabled ? " checked" : "") + '><b> Proxy enabled</b></label><div class="hint">When off, the proxy port refuses all traffic.</div></div>'
+    + field("Proxy listen address", '<input type="text" id="s-addr" value="' + esc(p.listen_addr) + '">', "e.g. :3128 or 0.0.0.0:3128 — changes apply live")
+    + field("Admin listen address", '<input type="text" id="s-addr2" value="' + esc(p.admin_listen_addr) + '">', "e.g. :8080 — changes apply live")
+    + '<div class="field"><label class="checkbox-row"><input type="checkbox" id="s-auth"' + (p.require_auth ? " checked" : "") + '><b> Require authentication</b></label><div class="hint">Off = open proxy (anyone who can reach it may use it).</div></div>'
+    + '<div class="field"><label class="checkbox-row"><input type="checkbox" id="s-http"' + (p.allow_http ? " checked" : "") + '><b> Allow plain-HTTP requests</b></label></div>'
+    + '<div class="field"><label class="checkbox-row"><input type="checkbox" id="s-https"' + (p.allow_https ? " checked" : "") + '><b> Allow HTTPS (CONNECT)</b></label></div>'
+    + field("Connect timeout (s)", '<input type="number" id="s-ct" min="1" max="300" value="' + p.connect_timeout_sec + '">')
+    + field("Read timeout (s)", '<input type="number" id="s-rt" min="1" max="3600" value="' + p.read_timeout_sec + '">')
+    + field("Default max conns / user", '<input type="number" id="s-dmc" min="0" max="100000" value="' + p.default_max_conns + '">', "0 = unlimited")
+    + field("Global max conns", '<input type="number" id="s-mgc" min="0" max="100000" value="' + p.max_global_conns + '">', "0 = unlimited")
+    + '</div></div>'
+    + '<div class="form-panel" style="margin-top:14px"><h3 style="margin-top:0">Activity log</h3><div class="form-grid">'
+    + field("In-memory ring size", '<input type="number" id="l-ring" min="100" max="200000" value="' + l.ring_size + '">', "100 – 200000 entries")
+    + field("File max size (MB)", '<input type="number" id="l-max" min="0" max="10000" value="' + l.file_max_mb + '">', "0 = disable file logging")
+    + '<div class="field"><label class="checkbox-row"><input type="checkbox" id="l-tofile"' + (l.to_file ? " checked" : "") + '><b> Write JSONL activity file</b></label><div class="hint">Stored as activity.jsonl in the data volume; rotated at max size.</div></div>'
+    + '</div></div>'
+    + '<div class="form-panel" style="margin-top:14px"><h3 style="margin-top:0">Backup / restore</h3>'
+    + '<div class="form-grid"><div class="field full">'
+    + '<p class="dim" style="margin:0 0 8px">Export the full configuration (users, rules, settings) as a JSON snapshot, or restore from one. '
+    + 'Restoring replaces the current configuration; the session key is never exported or imported.</p>'
+    + '<div style="display:flex;gap:10px;align-items:center">'
+    + '<button class="btn" id="x-export">Export config</button>'
+    + '<button class="btn" id="x-import">Import config…</button>'
+    + '<input type="file" id="x-file" accept="application/json,.json" hidden>'
+    + '<span class="msg" id="x-msg"></span>'
+    + '</div></div></div></div>'
+    + '<div class="form-actions" style="margin-top:16px"><button class="btn primary" id="s-save">Save settings</button><span class="msg" id="s-msg"></span></div>';
+  $("#x-export").onclick = () => {
+    const msg = $("#x-msg");
+    msg.className = "msg"; msg.textContent = "";
+    fetch("api/export", { credentials: "same-origin" })
+      .then(r => r.json())
+      .then(data => {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "forward-proxy-config.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+        msg.className = "msg ok"; msg.textContent = "Config exported.";
+      })
+      .catch((e) => { msg.className = "msg err"; msg.textContent = (e && e.message) || "export failed"; });
+  };
+  $("#x-import").onclick = () => $("#x-file").click();
+  $("#x-file").onchange = () => {
+    const msg = $("#x-msg");
+    const f = $("#x-file").files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let obj;
+      try { obj = JSON.parse(reader.result); }
+      catch (_) { msg.className = "msg err"; msg.textContent = "Not a valid JSON snapshot."; return; }
+      if (!window.confirm("Replace the current configuration with this snapshot? This cannot be undone (a config.json.bak is kept).")) return;
+      api("import", "POST", obj)
+        .then((res) => {
+          msg.className = "msg ok";
+          msg.textContent = "Config imported (" + (res.users || 0) + " users)." + ((res.warnings || []).join(" ") || "");
+        })
+        .catch((e) => { msg.className = "msg err"; msg.textContent = e.message || "import failed"; });
+    };
+    reader.readAsText(f);
+  };
+  $("#s-save").onclick = () => {
+    const msg = $("#s-msg");
+    msg.className = "msg"; msg.textContent = "";
+    const body = {
+      proxy: {
+        enabled: $("#s-enabled").checked,
+        listen_addr: $("#s-addr").value.trim(),
+        admin_listen_addr: $("#s-addr2").value.trim(),
+        require_auth: $("#s-auth").checked,
+        allow_http: $("#s-http").checked,
+        allow_https: $("#s-https").checked,
+        connect_timeout_sec: parseInt($("#s-ct").value || "15", 10),
+        read_timeout_sec: parseInt($("#s-rt").value || "300", 10),
+        default_max_conns: parseInt($("#s-dmc").value || "0", 10),
+        max_global_conns: parseInt($("#s-mgc").value || "0", 10),
+      },
+      logs: {
+        ring_size: parseInt($("#l-ring").value || "20000", 10),
+        file_max_mb: parseInt($("#l-max").value || "0", 10),
+        to_file: $("#l-tofile").checked,
+      },
+    };
+    api("settings", "PUT", body).then(() => {
+      statusCache = null;
+      msg.className = "msg ok"; msg.textContent = "Settings saved.";
+      setTimeout(() => msg.textContent = "", 3000);
+    }).catch((e) => { msg.className = "msg err"; msg.textContent = e.message; });
+  };
+}
+
+/* ---------------- boot ---------------- */
+
+(async () => {
+  try {
+    selfInfo = await api("self");
+    showApp();
+    refreshStatus(true).catch(() => {});
+  } catch (_) {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>

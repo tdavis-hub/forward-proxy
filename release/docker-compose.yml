@@ -1,0 +1,38 @@
+# Sample deployment for forward-proxy (v1.0.11 image, tagged :latest).
+#
+# Load the image first:   docker load -i forward-proxy-latest.tar.gz
+# Start:                  docker compose up -d
+# Admin UI:               http://localhost:8080/admin/   (admin/admin123 — change it!)
+# Proxy port:             http://<host>:3128             (HTTP Basic auth)
+
+services:
+  forward-proxy:
+    image: forward-proxy:latest
+    restart: unless-stopped
+    ports:
+      - "3128:3128"   # proxy port (point clients here)
+      - "8080:8080"   # admin UI + API
+    volumes:
+      - proxy-data:/data          # config.json, activity.jsonl, audit.log
+    # --- defense-in-depth hardening ---
+    read_only: true               # immutable rootfs; writes only to /data
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    # --- Optional: serve the admin UI over TLS ---
+    # environment:
+    #   TLS_CERT_FILE: /tls/cert.pem
+    #   TLS_KEY_FILE:  /tls/key.pem
+    # volumes:
+    #   - proxy-data:/data
+    #   - ./certs:/tls:ro
+    # ports:
+    #   - "3128:3128"
+    #   - "8443:8080"
+
+volumes:
+  proxy-data:

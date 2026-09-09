@@ -1,0 +1,14 @@
+.git
+.gitignore
+*.test
+*.out
+coverage.*
+Dockerfile
+.dockerignore
+README.md
+forwardproxy
+data/
+config.json
+config.json.bak
+activity.jsonl
+audit.log
